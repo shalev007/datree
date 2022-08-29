@@ -3,12 +3,14 @@ package remediate
 import (
 	"errors"
 	"fmt"
+	"github.com/tidwall/sjson"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/datreeio/datree/bl/files"
@@ -172,7 +174,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 	}
 
 	runCommand := &cobra.Command{
-		Use:   "remediate run <fileName>",
+		Use:   "run <fileName>",
 		Short: "Create remediate file for configurations in given <pattern>.",
 		Long:  "Create remediate file for configurations in given <pattern>. Input should be glob or `-` for stdin",
 		Example: utils.Example(`
@@ -306,7 +308,7 @@ func GenerateTestCommandData(testCommandFlags *RemediateCommandFlags, localConfi
 		return nil, err
 	}
 
-	policy, err := policy_factory.CreatePolicy(policies, testCommandFlags.PolicyName, evaluationPrerunDataResp.RegistrationURL, defaultRules)
+	policy, err := policy_factory.CreatePolicy(policies, "tzlil_0_rules", evaluationPrerunDataResp.RegistrationURL, defaultRules)
 	if err != nil {
 		return nil, err
 	}
@@ -431,10 +433,17 @@ func remediate(testResults evaluation.FormattedResults) error {
       }
     }
   },
+  "CONTAINERS_INCORRECT_PERIODSECONDS_VALUE": {
+    "remediate": {
+      "op": "add",
+      "path": "{{$INSTANCE_LOCATION}}/periodSeconds",
+      "value": 30
+    }
+  },
   "CRONJOB_MISSING_CONCURRENCYPOLICY_KEY": {
     "remediate": {
       "op": "add",
-      "path": "{{$INSTANCE_LOCATION}}/concurrencyPolicy",
+      "path": "{{$INSTANCE_LOCATION}}/",
       "value": "Forbid"
     }
   }
@@ -443,8 +452,50 @@ func remediate(testResults evaluation.FormattedResults) error {
 	remediateJson, _ := yaml.JSONToYAML(remediateJsonStr)
 	remediateJson, _ = yaml.YAMLToJSON(remediateJson)
 
-	value := gjson.Get(string(remediateJson), "CRONJOB_MISSING_CONCURRENCYPOLICY_KEY")
-	fmt.Println(value)
+	// map[resource_name]map[resource kind]*path_content_to_be_yamled
+	patchMapper := make(map[string]map[string][]string)
+
+	// todo use filename in the loop
+	for _, rules := range testResults.EvaluationResults.FileNameRuleMapper {
+		for _, rule := range rules {
+			for _, occurrence := range rule.OccurrencesDetails {
+
+				if _, exists := patchMapper[occurrence.MetadataName]; !exists {
+					patchMapper[occurrence.MetadataName] = make(map[string][]string)
+				}
+
+				remediateObj := gjson.Get(string(remediateJson), rule.Identifier)
+				// rule exists in remediate file
+				if remediateObj.Type != gjson.Null {
+					remediatePatchObj := gjson.Get(remediateObj.Raw, "remediate")
+					path := gjson.Get(remediatePatchObj.Raw, "path")
+					replacedPath := strings.ReplaceAll(path.String(), "{{$INSTANCE_LOCATION}}", rule.InstanceLocation)
+					remediatePatchObjUpdated, _ := sjson.Set(remediatePatchObj.Raw, "path", replacedPath)
+					remediateJson, _ := yaml.YAMLToJSON([]byte(remediatePatchObjUpdated))
+					// resource name and kind not already exists in mapper
+					if _, exists := patchMapper[occurrence.MetadataName][occurrence.Kind]; !exists {
+						patchMapper[occurrence.MetadataName][occurrence.Kind] = []string{}
+					}
+
+					patchMapper[occurrence.MetadataName][occurrence.Kind] = append(patchMapper[occurrence.MetadataName][occurrence.Kind], string(remediateJson))
+				}
+			}
+		}
+	}
+
+	for resourceName, metadataNamePatcher := range patchMapper {
+		res := "["
+		for kind, kindPatcher := range metadataNamePatcher {
+			for _, remediateObj := range kindPatcher {
+				res += remediateObj
+				res += ","
+			}
+			res += "]"
+			resYml, _ := yaml.JSONToYAML([]byte(res))
+			err := os.WriteFile(fmt.Sprintf("%s-%s-fixed.yml", kind, resourceName), resYml, 0644)
+			fmt.Println(err)
+		}
+	}
 
 	return nil
 }

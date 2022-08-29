@@ -168,7 +168,7 @@ type FailedRule struct {
 	DocumentationUrl string          `json:"DocumentationUrl"`
 	MessageOnFailure string          `json:"messageOnFailure"`
 	Configurations   []Configuration `json:"configurations"`
-	InstanceLocation string
+	InstanceLocation string          `json:"instanceLocation"`
 }
 
 type EvaluationResultRequest struct {

@@ -275,6 +275,7 @@ func (e *Evaluator) formatEvaluationResults(evaluationResults FailedRulesByFiles
 					DocumentationUrl:   failedRule.DocumentationUrl,
 					MessageOnFailure:   failedRule.MessageOnFailure,
 					OccurrencesDetails: []OccurrenceDetails{},
+					InstanceLocation:   failedRule.InstanceLocation,
 				}
 			}
 

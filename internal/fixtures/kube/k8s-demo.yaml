@@ -4,7 +4,7 @@ metadata:
   name: rss-site
   namespace: test
   labels:
-    owner: --
+    owner: tzlil
     environment: prod
     app: web
 spec:
@@ -19,35 +19,19 @@ spec:
         app: web
     spec:
       containers:
-        - name: front-end
-          image: nginx:latest
-          readinessProbe:
-            tcpSocket:
-              port: 8080
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "64m"
-            limits:
-              cpu: "500m"
-          ports:
-            - containerPort: 80
         - name: rss-reader
           image: datree/nginx@sha256:45b23dee08af5e43a7fea6c4cf9c25ccf269ee113168c19722f87876677c5cb2
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 8080
-              httpHeaders:
-                - name: Custom-Header
-                  value: Awesome
+#          livenessProbe:
+#            httpGet:
+#              path: /healthz
+#              port: 8080
+#              httpHeaders:
+#                - name: Custom-Header
+#                  value: Awesome
           readinessProbe:
             tcpSocket:
               port: 8080
             initialDelaySeconds: 5
-            periodSeconds: 10
           resources:
             requests:
               cpu: "64m"
@@ -57,3 +41,23 @@ spec:
               cpu: "500m"
           ports:
             - containerPort: 88
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hello
+spec:
+  schedule: "*/1 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: hello
+              image: busybox
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - -c
+                - date; echo Hello from the Kubernetes cluster
+          restartPolicy: OnFailure

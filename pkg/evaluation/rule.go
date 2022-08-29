@@ -6,6 +6,7 @@ type Rule struct {
 	MessageOnFailure   string
 	DocumentationUrl   string
 	OccurrencesDetails []OccurrenceDetails
+	InstanceLocation   string
 }
 
 func (rp *Rule) GetFailedOccurrencesCount() int {
