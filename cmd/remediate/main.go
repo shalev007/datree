@@ -159,10 +159,22 @@ type RemediateCommandContext struct {
 	Messager       Messager
 }
 
+// AddFlags registers flags for a cli
+func (flags *RemediateCommandFlags) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&flags.K8sVersion, "schema-version", "s", "", "Set kubernetes version to validate against. Defaults to 1.20.0")
+	cmd.Flags().StringVarP(&flags.PolicyName, "policy", "p", "", "Policy name to run against")
+
+	cmd.Flags().StringVar(&flags.PolicyConfig, "policy-config", "", "Path for local policies configuration file")
+	cmd.Flags().BoolVar(&flags.OnlyK8sFiles, "only-k8s-files", false, "Evaluate only valid yaml files with the properties 'apiVersion' and 'kind'. Ignore everything else")
+	// kubeconform flag
+	cmd.Flags().StringArrayVarP(&flags.SchemaLocations, "schema-location", "", []string{}, "Override schemas location search path (can be specified multiple times)")
+	cmd.Flags().BoolVarP(&flags.IgnoreMissingSchemas, "ignore-missing-schemas", "", false, "Ignore missing schemas when executing schema validation step")
+}
+
 func New(ctx *RemediateCommandContext) *cobra.Command {
 	var localConfigContent *localConfig.LocalConfig
 
-	testCommandFlags := NewRemediateCommandFlags()
+	remediateCommandFlags := NewRemediateCommandFlags()
 
 	configCommand := &cobra.Command{
 		Use:   "remediate",
@@ -199,14 +211,13 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 				return err
 			}
 
-			ctx.CliClient.AddFlags(testCommandFlags.ToMapping())
 			evaluationPrerunData, err := ctx.CliClient.RequestEvaluationPrerunData(localConfigContent.Token, false)
 			if err != nil {
 				return err
 			}
 
 			saveDefaultRulesAsFile(evaluationPrerunData.DefaultRulesYaml)
-			testCommandOptions, err := GenerateTestCommandData(testCommandFlags, localConfigContent, evaluationPrerunData)
+			testCommandOptions, err := GenerateTestCommandData(remediateCommandFlags, localConfigContent, evaluationPrerunData)
 			if err != nil {
 				return err
 			}
@@ -215,6 +226,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 			return err
 		},
 	}
+	remediateCommandFlags.AddFlags(runCommand)
 
 	publishCommand := &cobra.Command{
 		Use:   "publish <fileName>",
@@ -309,7 +321,7 @@ func GenerateTestCommandData(testCommandFlags *RemediateCommandFlags, localConfi
 		return nil, err
 	}
 
-	policy, err := policy_factory.CreatePolicy(policies, "tzlil_0_rules", evaluationPrerunDataResp.RegistrationURL, defaultRules)
+	policy, err := policy_factory.CreatePolicy(policies, testCommandFlags.PolicyName, evaluationPrerunDataResp.RegistrationURL, defaultRules)
 	if err != nil {
 		return nil, err
 	}
