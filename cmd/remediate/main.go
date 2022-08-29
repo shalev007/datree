@@ -23,6 +23,7 @@ import (
 	"github.com/datreeio/datree/pkg/utils"
 	"github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
+	"github.com/tidwall/gjson"
 )
 
 type LocalConfig interface {
@@ -337,6 +338,7 @@ func testBeforeRemediate(ctx *RemediateCommandContext, paths []string, testComma
 
 	if wereViolationsFound(validationManager, &results) {
 		resRemediate := remediate(results)
+		fmt.Println(resRemediate)
 		return ViolationsFoundError
 	} else {
 		fmt.Println("All rules passed successfully")
@@ -365,22 +367,33 @@ func wereViolationsFound(validationManager *ValidationManager, results *evaluati
 
 func remediate(testResults evaluation.FormattedResults) error {
 	// go to the server to get the remediate file
-	remediateYmlStr := []byte(`CONTAINERS_MISSING_LIVENESSPROBE_KEY:
-  remediate:
-    op: add
-    path: "{{$INSTANCE_LOCATION}}/livenessProbe"
-    value:
-      httpGet:
-        path: "/healthz"
-        port: 8080
-CRONJOB_MISSING_CONCURRENCYPOLICY_KEY:
-  remediate:
-    op: add
-    path: "{{$INSTANCE_LOCATION}}/concurrencyPolicy"
-    value: Forbid`)
+	remediateJsonStr := []byte(`{
+  "CONTAINERS_MISSING_LIVENESSPROBE_KEY": {
+    "remediate": {
+      "op": "add",
+      "path": "{{$INSTANCE_LOCATION}}/livenessProbe",
+      "value": {
+        "httpGet": {
+          "path": "/healthz",
+          "port": 8080
+        }
+      }
+    }
+  },
+  "CRONJOB_MISSING_CONCURRENCYPOLICY_KEY": {
+    "remediate": {
+      "op": "add",
+      "path": "{{$INSTANCE_LOCATION}}/concurrencyPolicy",
+      "value": "Forbid"
+    }
+  }
+}`)
 
-	remediateYml, _ := yaml.YAMLToJSON(remediateYmlStr)
-	remediateYml, _ = yaml.JSONToYAML(remediateYmlStr)
+	remediateJson, _ := yaml.JSONToYAML(remediateJsonStr)
+	remediateJson, _ = yaml.YAMLToJSON(remediateJson)
+
+	value := gjson.Get(string(remediateJson), "CRONJOB_MISSING_CONCURRENCYPOLICY_KEY")
+	fmt.Println(value)
 
 	return nil
 }

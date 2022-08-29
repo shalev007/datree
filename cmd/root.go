@@ -93,6 +93,9 @@ func NewRootCommand(app *App) *cobra.Command {
 		Printer:        app.Context.Printer,
 		CliClient:      app.Context.CliClient,
 		FilesExtractor: app.Context.FilesExtractor,
+		Reader:         app.Context.Reader,
+		K8sValidator:   app.Context.K8sValidator,
+		Evaluator:      app.Context.Evaluator,
 	}))
 
 	rootCmd.AddCommand(completion.New())
