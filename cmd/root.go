@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/datreeio/datree/cmd/remediate"
 	"time"
 
 	"github.com/datreeio/datree/pkg/evaluation"
@@ -84,6 +85,14 @@ func NewRootCommand(app *App) *cobra.Command {
 		Printer:          app.Context.Printer,
 		PublishCliClient: app.Context.CliClient,
 		FilesExtractor:   app.Context.FilesExtractor,
+	}))
+
+	rootCmd.AddCommand(remediate.New(&remediate.RemediateCommandContext{
+		CliVersion:     CliVersion,
+		LocalConfig:    app.Context.LocalConfig,
+		Printer:        app.Context.Printer,
+		CliClient:      app.Context.CliClient,
+		FilesExtractor: app.Context.FilesExtractor,
 	}))
 
 	rootCmd.AddCommand(completion.New())

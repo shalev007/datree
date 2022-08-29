@@ -1,0 +1,11 @@
+- op: replace
+  path: "/spec/replicas"
+  value: 1
+- op: add
+  path: "/spec/template/spec/containers/1"
+  value:
+    name: redis-container
+    image: redis
+- op: add
+  path: "/spec/template/metadata/labels/cache"
+  value: redis

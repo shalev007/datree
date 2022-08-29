@@ -27,6 +27,10 @@ require (
 require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
+	github.com/tidwall/gjson v1.14.2 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 )
 

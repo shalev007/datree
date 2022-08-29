@@ -207,6 +207,7 @@ func (e *Evaluator) evaluateRule(rule policy_factory.RuleWithSchema, configurati
 		DocumentationUrl: rule.DocumentationUrl,
 		MessageOnFailure: rule.MessageOnFailure,
 		Configurations:   []cliClient.Configuration{configuration},
+		InstanceLocation: validationResult[0].InstanceLocation,
 	}
 
 	return failedRule, nil
