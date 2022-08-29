@@ -218,7 +218,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 	configCommand.AddCommand(runCommand)
 	configCommand.AddCommand(publishCommand)
 
-	return runCommand
+	return configCommand
 }
 
 func GenerateTestCommandData(testCommandFlags *RemediateCommandFlags, localConfigContent *localConfig.LocalConfig, evaluationPrerunDataResp *cliClient.EvaluationPrerunDataResponse) (*TestCommandData, error) {
