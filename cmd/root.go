@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"github.com/datreeio/datree/cmd/remediate"
 	"time"
+
+	"github.com/datreeio/datree/cmd/remediate"
 
 	"github.com/datreeio/datree/pkg/evaluation"
 
@@ -96,6 +97,7 @@ func NewRootCommand(app *App) *cobra.Command {
 		Reader:         app.Context.Reader,
 		K8sValidator:   app.Context.K8sValidator,
 		Evaluator:      app.Context.Evaluator,
+		Messager:       app.Context.Messager,
 	}))
 
 	rootCmd.AddCommand(completion.New())

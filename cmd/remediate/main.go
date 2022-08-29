@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/datreeio/datree/bl/files"
+	"github.com/datreeio/datree/bl/messager"
 	policy_factory "github.com/datreeio/datree/bl/policy"
 	"github.com/datreeio/datree/bl/validation"
 	"github.com/datreeio/datree/pkg/cliClient"
@@ -38,6 +39,8 @@ type CliClient interface {
 	//todo add the publish remediate file code
 	RequestEvaluationPrerunData(token string, isCi bool) (*cliClient.EvaluationPrerunDataResponse, error)
 	AddFlags(flags map[string]interface{})
+	GetRemediationConfig() (interface{}, error)
+	PublishRemediation(remediationConfig cliClient.PublishFailedRequestBody, token string) (*cliClient.PublishFailedResponse, error)
 }
 
 type K8sValidator interface {
@@ -52,6 +55,10 @@ type Evaluator interface {
 
 type Reader interface {
 	FilterFiles(paths []string) ([]string, error)
+}
+
+type Messager interface {
+	LoadVersionMessages(cliVersion string) chan *messager.VersionMessage
 }
 
 var ViolationsFoundError = errors.New("")
@@ -146,9 +153,12 @@ type RemediateCommandContext struct {
 	K8sValidator   K8sValidator
 	FilesExtractor files.FilesExtractorInterface
 	Reader         Reader
+	Messager       Messager
 }
 
 func New(ctx *RemediateCommandContext) *cobra.Command {
+	var localConfigContent *localConfig.LocalConfig
+
 	testCommandFlags := NewRemediateCommandFlags()
 
 	configCommand := &cobra.Command{
@@ -213,6 +223,47 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 
 		# Note You need to first enable Policy-as-Code (PaC) on the settings page in the dashboard
 		`),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				errMessage := "requires at least 1 arg"
+				return fmt.Errorf(errMessage)
+			}
+			return nil
+		},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			outputFlag, _ := cmd.Flags().GetString("output")
+			if !evaluation.IsFormattedOutputOption(outputFlag) {
+
+				messages := ctx.Messager.LoadVersionMessages(ctx.CliVersion)
+				for msg := range messages {
+					ctx.Printer.PrintMessage(msg.MessageText+"\n", msg.MessageColor)
+				}
+			}
+			var err error
+			localConfigContent, err = ctx.LocalConfig.GetLocalConfiguration()
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+			cmd.SilenceErrors = true
+
+			publishFailedResponse, err := publish(ctx, args[0], localConfigContent)
+			if publishFailedResponse != nil {
+				ctx.Printer.PrintMessage("Publish failed:\n", "error")
+				for _, message := range publishFailedResponse.Payload {
+					ctx.Printer.PrintMessage("\t"+message+"\n", "error")
+				}
+			} else if err != nil {
+				ctx.Printer.PrintMessage("Publish failed: \n"+err.Error()+"\n", "error")
+			} else {
+				ctx.Printer.PrintMessage("Published successfully\n", "green")
+			}
+
+			return err
+		},
 	}
 
 	configCommand.AddCommand(runCommand)
@@ -470,4 +521,16 @@ func evaluate(ctx *RemediateCommandContext, filesPaths []string, testCommandData
 	}
 
 	return evaluationResultData, nil
+}
+
+func publish(ctx *RemediateCommandContext, path string, localConfigContent *localConfig.LocalConfig) (*cliClient.PublishFailedResponse, error) {
+	remediationsConfiguration, err := ctx.FilesExtractor.ExtractYamlFileToUnknownStruct(path)
+	if err != nil {
+		return nil, err
+	}
+
+	requestBody := cliClient.PublishFailedRequestBody{
+		File: remediationsConfiguration,
+	}
+	return ctx.CliClient.PublishRemediation(requestBody, localConfigContent.Token)
 }
