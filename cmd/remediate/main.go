@@ -3,7 +3,6 @@ package remediate
 import (
 	"errors"
 	"fmt"
-	"github.com/tidwall/sjson"
 	"io"
 	"io/ioutil"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/tidwall/sjson"
 
 	"github.com/datreeio/datree/bl/files"
 	"github.com/datreeio/datree/bl/messager"
@@ -41,7 +42,7 @@ type CliClient interface {
 	//todo add the publish remediate file code
 	RequestEvaluationPrerunData(token string, isCi bool) (*cliClient.EvaluationPrerunDataResponse, error)
 	AddFlags(flags map[string]interface{})
-	GetRemediationConfig() (interface{}, error)
+	GetRemediationConfig(token string) (*cliClient.RemediationConfig, error)
 	PublishRemediation(remediationConfig cliClient.PublishFailedRequestBody, token string) (*cliClient.PublishFailedResponse, error)
 }
 
@@ -583,5 +584,8 @@ func publish(ctx *RemediateCommandContext, path string, localConfigContent *loca
 	requestBody := cliClient.PublishFailedRequestBody{
 		File: remediationsConfiguration,
 	}
+
+	res, _ := ctx.CliClient.GetRemediationConfig(localConfigContent.Token)
+	fmt.Println(res)
 	return ctx.CliClient.PublishRemediation(requestBody, localConfigContent.Token)
 }

@@ -12,6 +12,14 @@ type PublishFailedRequestBody struct {
 	Policy string              `json:"policy"`
 }
 
+type JsonPatch struct {
+	Op    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value"`
+}
+
+type RemediationConfig map[string]map[string]JsonPatch
+
 func (c *CliClient) PublishRemediation(remediationConfig PublishFailedRequestBody, token string) (*PublishFailedResponse, error) {
 	res, publishErr := c.httpClient.Request(http.MethodPut, "/cli/remedation/tokens/"+token, remediationConfig, map[string]string{})
 	if publishErr != nil {
@@ -28,6 +36,21 @@ func (c *CliClient) PublishRemediation(remediationConfig PublishFailedRequestBod
 	return nil, nil
 }
 
-func (c *CliClient) GetRemediationConfig() (interface{}, error) {
-	return nil, nil
+func (c *CliClient) GetRemediationConfig(token string) (*RemediationConfig, error) {
+	res, requestError := c.httpClient.Request(http.MethodGet, "/cli/remedation/tokens/"+token, interface{}(nil), map[string]string{})
+	if requestError != nil {
+		return nil, requestError
+	}
+
+	if res.StatusCode == 0 {
+		return nil, nil
+	}
+
+	remediationConfig := &RemediationConfig{}
+	err := json.Unmarshal(res.Body, remediationConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return remediationConfig, requestError
 }
