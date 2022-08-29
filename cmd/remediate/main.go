@@ -3,6 +3,14 @@ package remediate
 import (
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"sync"
+
 	"github.com/datreeio/datree/bl/files"
 	policy_factory "github.com/datreeio/datree/bl/policy"
 	"github.com/datreeio/datree/bl/validation"
@@ -15,13 +23,6 @@ import (
 	"github.com/datreeio/datree/pkg/utils"
 	"github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
-	"io"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"reflect"
-	"regexp"
-	"sync"
 )
 
 type LocalConfig interface {
@@ -149,8 +150,18 @@ type RemediateCommandContext struct {
 func New(ctx *RemediateCommandContext) *cobra.Command {
 	testCommandFlags := NewRemediateCommandFlags()
 
-	publishCommand := &cobra.Command{
-		Use:   "remediate <fileName>",
+	configCommand := &cobra.Command{
+		Use:   "remediate",
+		Short: "Create remediate file for configurations in given <pattern>.",
+		Long:  "Create remediate file for configurations in given <pattern>. Input should be glob or `-` for stdin",
+		Example: utils.Example(`
+		# Remediate the configurations in given YAML file
+		datree remediate policies.yaml
+		`),
+	}
+
+	runCommand := &cobra.Command{
+		Use:   "remediate run <fileName>",
 		Short: "Create remediate file for configurations in given <pattern>.",
 		Long:  "Create remediate file for configurations in given <pattern>. Input should be glob or `-` for stdin",
 		Example: utils.Example(`
@@ -191,7 +202,22 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 		},
 	}
 
-	return publishCommand
+	publishCommand := &cobra.Command{
+		Use:   "publish <fileName>",
+		Short: "Publish remediate configuration for given <fileName>.",
+		Long:  "Publish remediate configuration for given <fileName>. Input should be the path to the Policy-as-Code yaml configuration file",
+		Example: utils.Example(`
+		# Publish the remediate configuration YAML file
+		datree remediate publish remediate.yaml
+
+		# Note You need to first enable Policy-as-Code (PaC) on the settings page in the dashboard
+		`),
+	}
+
+	configCommand.AddCommand(runCommand)
+	configCommand.AddCommand(publishCommand)
+
+	return runCommand
 }
 
 func GenerateTestCommandData(testCommandFlags *RemediateCommandFlags, localConfigContent *localConfig.LocalConfig, evaluationPrerunDataResp *cliClient.EvaluationPrerunDataResponse) (*TestCommandData, error) {
