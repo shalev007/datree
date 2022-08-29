@@ -210,7 +210,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return testBeforeRemediate(ctx, args, testCommandOptions)
+			return testAndRemediate(ctx, args, testCommandOptions)
 
 			return err
 		},
@@ -349,7 +349,7 @@ type MessagesContext struct {
 	CliClient   *cliClient.CliClient
 }
 
-func testBeforeRemediate(ctx *RemediateCommandContext, paths []string, testCommandData *TestCommandData) error {
+func testAndRemediate(ctx *RemediateCommandContext, paths []string, testCommandData *TestCommandData) error {
 	if paths[0] == "-" {
 		tempFile, err := os.CreateTemp("", "datree_temp_*.yaml")
 		if err != nil {
@@ -391,8 +391,8 @@ func testBeforeRemediate(ctx *RemediateCommandContext, paths []string, testComma
 	results := evaluationResultData.FormattedResults
 
 	if wereViolationsFound(validationManager, &results) {
-		resRemediate := remediate(results)
-		fmt.Println(resRemediate)
+		err = remediate(ctx, testCommandData.Token, results)
+		// todo handle remediate error
 		return ViolationsFoundError
 	} else {
 		fmt.Println("All rules passed successfully")
@@ -419,8 +419,10 @@ func wereViolationsFound(validationManager *ValidationManager, results *evaluati
 	}
 }
 
-func remediate(testResults evaluation.FormattedResults) error {
-	// go to the server to get the remediate file
+func remediate(ctx *RemediateCommandContext, token string, testResults evaluation.FormattedResults) error {
+	//res, _ := ctx.CliClient.GetRemediationConfig(token)
+	//fmt.Println(res)
+
 	remediateJsonStr := []byte(`{
   "CONTAINERS_MISSING_LIVENESSPROBE_KEY": {
     "remediate": {
@@ -455,6 +457,16 @@ func remediate(testResults evaluation.FormattedResults) error {
 
 	// map[resource_name]map[resource kind]*path_content_to_be_yamled
 	patchMapper := make(map[string]map[string][]string)
+
+	// create patches folder
+	// todo maybe rename
+	isDirExists, _ := exists("patches")
+	if !isDirExists {
+		osMkdirErr := os.Mkdir("patches", os.ModePerm)
+		if osMkdirErr != nil {
+			return osMkdirErr
+		}
+	}
 
 	// todo use filename in the loop
 	for _, rules := range testResults.EvaluationResults.FileNameRuleMapper {
@@ -493,12 +505,23 @@ func remediate(testResults evaluation.FormattedResults) error {
 			}
 			res += "]"
 			resYml, _ := yaml.JSONToYAML([]byte(res))
-			err := os.WriteFile(fmt.Sprintf("%s-%s-fixed.yml", kind, resourceName), resYml, 0644)
+			err := os.WriteFile(fmt.Sprintf("patches/%s-%s-fixed.yml", kind, resourceName), resYml, 0644)
 			fmt.Println(err)
 		}
 	}
 
 	return nil
+}
+
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
 
 func evaluate(ctx *RemediateCommandContext, filesPaths []string, testCommandData *TestCommandData) (EvaluationResultData, error) {
@@ -576,16 +599,14 @@ func evaluate(ctx *RemediateCommandContext, filesPaths []string, testCommandData
 }
 
 func publish(ctx *RemediateCommandContext, path string, localConfigContent *localConfig.LocalConfig) (*cliClient.PublishFailedResponse, error) {
-	remediationsConfiguration, err := ctx.FilesExtractor.ExtractYamlFileToUnknownStruct(path)
+	remediationConfiguration, err := ctx.FilesExtractor.ExtractYamlFileToUnknownStruct(path)
 	if err != nil {
 		return nil, err
 	}
 
 	requestBody := cliClient.PublishFailedRequestBody{
-		File: remediationsConfiguration,
+		File: remediationConfiguration,
 	}
 
-	res, _ := ctx.CliClient.GetRemediationConfig(localConfigContent.Token)
-	fmt.Println(res)
 	return ctx.CliClient.PublishRemediation(requestBody, localConfigContent.Token)
 }
