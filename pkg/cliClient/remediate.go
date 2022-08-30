@@ -37,7 +37,7 @@ func (c *CliClient) PublishRemediation(remediationConfig PublishFailedRequestBod
 }
 
 func (c *CliClient) GetRemediationConfig(token string, policyName string) (*RemediationConfig, error) {
-	res, requestError := c.httpClient.Request(http.MethodGet, "/cli/remediation/tokens/"+token+"?policy_name=", interface{}(nil), map[string]string{})
+	res, requestError := c.httpClient.Request(http.MethodGet, "/cli/remediation/tokens/"+token+"?policy_name="+policyName, interface{}(nil), map[string]string{})
 	if requestError != nil {
 		return nil, requestError
 	}

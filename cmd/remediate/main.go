@@ -188,7 +188,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 	}
 
 	runCommand := &cobra.Command{
-		Use:   "run <fileName>",
+		Use:   "run <pattern>",
 		Short: "Create remediate file for configurations in given <pattern>.",
 		Long:  "Create remediate file for configurations in given <pattern>. Input should be glob or `-` for stdin",
 		Example: utils.Example(`
@@ -197,11 +197,11 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 
 		`),
 		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				errMessage := "requires 1 arg"
-				return fmt.Errorf(errMessage)
+			err := utils.ValidateStdinPathArgument(args)
+			if err != nil {
+				return err
 			}
-			return nil
+			return remediateCommandFlags.Validate()
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
