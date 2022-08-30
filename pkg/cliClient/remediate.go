@@ -18,7 +18,12 @@ type JsonPatch struct {
 	Value interface{} `json:"value"`
 }
 
-type RemediationConfig map[string]map[string]JsonPatch
+type RemediationConfigContainer struct {
+	Run       string    `json:"run"`
+	Remediate JsonPatch `json:"remediate"`
+}
+
+type RemediationConfig map[string]RemediationConfigContainer
 
 func (c *CliClient) PublishRemediation(remediationConfig PublishFailedRequestBody, token string) (*PublishFailedResponse, error) {
 	res, publishErr := c.httpClient.Request(http.MethodPut, "/cli/remediation/tokens/"+token, remediationConfig, map[string]string{})

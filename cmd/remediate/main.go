@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -248,8 +249,6 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 				return err
 			}
 			return testAndRemediate(ctx, args, testCommandOptions)
-
-			return err
 		},
 	}
 	remediateRunCommandFlags.AddFlags(runCommand)
@@ -432,7 +431,11 @@ func testAndRemediate(ctx *RemediateCommandContext, paths []string, testCommandD
 	results := evaluationResultData.FormattedResults
 
 	if wereViolationsFound(validationManager, &results) {
-		err = remediate(ctx, testCommandData.Token, testCommandData.Policy.Name, results)
+		policyName := ""
+		if testCommandData.Policy.Name != "Default" {
+			policyName = testCommandData.Policy.Name
+		}
+		err = remediate(ctx, testCommandData.Token, policyName, results)
 		// todo handle remediate error
 		return ViolationsFoundError
 	} else {
@@ -494,9 +497,35 @@ func remediate(ctx *RemediateCommandContext, token string, policyName string, te
 				// rule exists in remediate file
 				if remediateObj.Type != gjson.Null {
 					remediatePatchObj := gjson.Get(remediateObj.Raw, "remediate")
+					runCmd := gjson.Get(remediateObj.Raw, "run")
 					path := gjson.Get(remediatePatchObj.Raw, "path")
 					replacedPath := strings.ReplaceAll(path.String(), "{{$INSTANCE_LOCATION}}", rule.InstanceLocation)
+
 					remediatePatchObjUpdated, _ := sjson.Set(remediatePatchObj.Raw, "path", replacedPath)
+
+					// user used run shell command
+					if runCmd.Type != gjson.Null && runCmd.String() != "" {
+
+						cmd := exec.Command("/bin/sh", "-c", runCmd.Str)
+						cmd.Env = append(cmd.Env, "CONFIG=Hello asdsaf")
+
+						output, err := cmd.CombinedOutput()
+						if err != nil {
+							return err
+						}
+
+						preFormattedValue := gjson.Get(remediatePatchObj.Raw, "value")
+						formattedOutput := strings.ReplaceAll(string(output), "\n", "")
+						postFormattedValue := strings.ReplaceAll(preFormattedValue.String(), "{{$RUN_VALUE}}", formattedOutput)
+						var jsonMap map[string]interface{}
+						unmarshalError := json.Unmarshal([]byte(postFormattedValue), &jsonMap)
+						if unmarshalError != nil {
+							remediatePatchObjUpdated, _ = sjson.Set(remediatePatchObjUpdated, "value", postFormattedValue)
+						} else {
+							remediatePatchObjUpdated, _ = sjson.Set(remediatePatchObjUpdated, "value", jsonMap)
+						}
+
+					}
 					remediateJson, _ := yaml.YAMLToJSON([]byte(remediatePatchObjUpdated))
 					// resource name and kind not already exists in mapper
 					if _, exists := patchMapper[occurrence.MetadataName][occurrence.Kind]; !exists {

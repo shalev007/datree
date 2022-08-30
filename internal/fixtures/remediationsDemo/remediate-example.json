@@ -1,11 +1,12 @@
 {
   "CONTAINERS_MISSING_LIVENESSPROBE_KEY": {
+    "run": "echo shalev222222222222",
     "remediate": {
       "op": "add",
       "path": "{{$INSTANCE_LOCATION}}/livenessProbe",
       "value": {
         "httpGet": {
-          "path": "/healthz",
+          "path": "/{{$RUN_VALUE}}",
           "port": 8080
         }
       }
@@ -19,10 +20,11 @@
     }
   },
   "CRONJOB_MISSING_CONCURRENCYPOLICY_KEY": {
+    "run": "echo Forbid",
     "remediate": {
       "op": "add",
       "path": "{{$INSTANCE_LOCATION}}/",
-      "value": "Forbid"
+      "value": "{{$RUN_VALUE}}"
     }
   }
 }
