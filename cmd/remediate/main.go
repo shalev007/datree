@@ -510,18 +510,15 @@ func remediate(ctx *RemediateCommandContext, token string, policyName string, te
 
 					// user used run shell command for injecting the evaluated value to the valued need to be patched
 					if runCmd.Type != gjson.Null && runCmd.String() != "" {
-						cmd := exec.Command("/bin/sh", "-c", runCmd.Str)
-						// CONFIG=Hello...is a poc for bubble the configuration structure into the bash script to be able to do more sophisticated logic
-						cmd.Env = append(cmd.Env, "CONFIG=Hello asdsaf")
-
-						output, err := cmd.CombinedOutput()
+						outputStr, err := execBashScript(runCmd.Str)
 						if err != nil {
 							return err
 						}
+
 						// get the value from patch object in order to inject the computed value / just the value if run function doesn't exsits
 						preFormattedValue := gjson.Get(remediatePatchObj.Raw, "value")
 						// the output from exec command is adding "\n" - we don't need it
-						formattedOutput := strings.ReplaceAll(string(output), "\n", "")
+						formattedOutput := strings.ReplaceAll(outputStr, "\n", "")
 						// injecting the computed value
 						postFormattedValue := strings.ReplaceAll(preFormattedValue.String(), "{{$RUN_VALUE}}", formattedOutput)
 						// Unmarshal to json if the value is an object
@@ -657,4 +654,17 @@ func publish(ctx *RemediateCommandContext, path string, policyName string, local
 	}
 
 	return ctx.CliClient.PublishRemediation(requestBody, localConfigContent.Token)
+}
+
+func execBashScript(runCmd string) (string, error) {
+	//runCmd.Str
+	cmd := exec.Command("/bin/sh", "-c", runCmd)
+	// CONFIG=Hello...is a poc for bubble the configuration structure into the bash script to be able to do more sophisticated logic
+	cmd.Env = append(cmd.Env, "CONFIG=Hello asdsaf")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
 }
