@@ -67,26 +67,34 @@ type Messager interface {
 
 var ViolationsFoundError = errors.New("")
 
-type RemediateCommandFlags struct {
+type RemediateRunCommandFlags struct {
 	Output               string
 	K8sVersion           string
 	IgnoreMissingSchemas bool
 	OnlyK8sFiles         bool
-	Verbose              bool
 	PolicyName           string
 	SchemaLocations      []string
 	PolicyConfig         string
-	NoRecord             bool
 }
 
-// RemediateCommandFlags constructor
-func NewRemediateCommandFlags() *RemediateCommandFlags {
-	return &RemediateCommandFlags{
+type RemediatePublishCommandFlags struct {
+	PolicyName string
+}
+
+// TestCommandFlags constructor
+func NewRemediatePublishCommandFlags() *RemediatePublishCommandFlags {
+	return &RemediatePublishCommandFlags{
+		PolicyName: "",
+	}
+}
+
+// RemediateRunCommandFlags constructor
+func NewRemediateRunCommandFlags() *RemediateRunCommandFlags {
+	return &RemediateRunCommandFlags{
 		Output:               "",
 		K8sVersion:           "",
 		IgnoreMissingSchemas: false,
 		OnlyK8sFiles:         false,
-		Verbose:              false,
 		PolicyName:           "",
 		SchemaLocations:      make([]string, 0),
 	}
@@ -102,7 +110,7 @@ type TestCommandData struct {
 	Token                string
 }
 
-func (flags *RemediateCommandFlags) ToMapping() map[string]interface{} {
+func (flags *RemediateRunCommandFlags) ToMapping() map[string]interface{} {
 	val := reflect.Indirect(reflect.ValueOf(flags))
 	fieldsAmount := val.Type().NumField()
 	flagsByString := make(map[string]interface{})
@@ -115,7 +123,7 @@ func (flags *RemediateCommandFlags) ToMapping() map[string]interface{} {
 	return flagsByString
 }
 
-func (flags *RemediateCommandFlags) Validate() error {
+func (flags *RemediateRunCommandFlags) Validate() error {
 	outputValue := flags.Output
 
 	if !evaluation.IsValidOutputOption(outputValue) {
@@ -131,6 +139,19 @@ func (flags *RemediateCommandFlags) Validate() error {
 
 	return nil
 
+}
+
+func (flags *RemediatePublishCommandFlags) ToMapping() map[string]interface{} {
+	val := reflect.Indirect(reflect.ValueOf(flags))
+	fieldsAmount := val.Type().NumField()
+	flagsByString := make(map[string]interface{})
+
+	for i := 0; i < fieldsAmount; i++ {
+		field := val.Type().Field(i)
+		flagsByString[field.Name] = val.Field(i).Interface()
+	}
+
+	return flagsByString
 }
 
 func validateK8sVersionFormatIfProvided(k8sVersion string) error {
@@ -161,7 +182,7 @@ type RemediateCommandContext struct {
 }
 
 // AddFlags registers flags for a cli
-func (flags *RemediateCommandFlags) AddFlags(cmd *cobra.Command) {
+func (flags *RemediateRunCommandFlags) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&flags.K8sVersion, "schema-version", "s", "", "Set kubernetes version to validate against. Defaults to 1.20.0")
 	cmd.Flags().StringVarP(&flags.PolicyName, "policy", "p", "", "Policy name to run against")
 
@@ -172,10 +193,14 @@ func (flags *RemediateCommandFlags) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVarP(&flags.IgnoreMissingSchemas, "ignore-missing-schemas", "", false, "Ignore missing schemas when executing schema validation step")
 }
 
+func (flags *RemediatePublishCommandFlags) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&flags.PolicyName, "policy", "p", "", "Policy name to run against")
+}
 func New(ctx *RemediateCommandContext) *cobra.Command {
 	var localConfigContent *localConfig.LocalConfig
 
-	remediateCommandFlags := NewRemediateCommandFlags()
+	remediateRunCommandFlags := NewRemediateRunCommandFlags()
+	remediatePublishCommandFlags := NewRemediatePublishCommandFlags()
 
 	configCommand := &cobra.Command{
 		Use:   "remediate",
@@ -201,7 +226,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return remediateCommandFlags.Validate()
+			return remediateRunCommandFlags.Validate()
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -218,7 +243,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 			}
 
 			saveDefaultRulesAsFile(evaluationPrerunData.DefaultRulesYaml)
-			testCommandOptions, err := GenerateTestCommandData(remediateCommandFlags, localConfigContent, evaluationPrerunData)
+			testCommandOptions, err := GenerateTestCommandData(remediateRunCommandFlags, localConfigContent, evaluationPrerunData)
 			if err != nil {
 				return err
 			}
@@ -227,7 +252,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 			return err
 		},
 	}
-	remediateCommandFlags.AddFlags(runCommand)
+	remediateRunCommandFlags.AddFlags(runCommand)
 
 	publishCommand := &cobra.Command{
 		Use:   "publish <fileName>",
@@ -266,7 +291,9 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 			cmd.SilenceUsage = true
 			cmd.SilenceErrors = true
 
-			publishFailedResponse, err := publish(ctx, args[0], args[1], localConfigContent)
+			policyFlag, _ := cmd.Flags().GetString("policy")
+
+			publishFailedResponse, err := publish(ctx, args[0], policyFlag, localConfigContent)
 			if publishFailedResponse != nil {
 				ctx.Printer.PrintMessage("Publish failed:\n", "error")
 				for _, message := range publishFailedResponse.Payload {
@@ -281,6 +308,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 			return err
 		},
 	}
+	remediatePublishCommandFlags.AddFlags(publishCommand)
 
 	configCommand.AddCommand(runCommand)
 	configCommand.AddCommand(publishCommand)
@@ -288,7 +316,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 	return configCommand
 }
 
-func GenerateTestCommandData(testCommandFlags *RemediateCommandFlags, localConfigContent *localConfig.LocalConfig, evaluationPrerunDataResp *cliClient.EvaluationPrerunDataResponse) (*TestCommandData, error) {
+func GenerateTestCommandData(testCommandFlags *RemediateRunCommandFlags, localConfigContent *localConfig.LocalConfig, evaluationPrerunDataResp *cliClient.EvaluationPrerunDataResponse) (*TestCommandData, error) {
 	k8sVersion := testCommandFlags.K8sVersion
 	if k8sVersion == "" {
 		k8sVersion = localConfigContent.SchemaVersion
