@@ -435,40 +435,11 @@ func wereViolationsFound(validationManager *ValidationManager, results *evaluati
 func remediate(ctx *RemediateCommandContext, token string, policyName string, testResults evaluation.FormattedResults) error {
 	remediationConfig, _ := ctx.CliClient.GetRemediationConfig(token, policyName)
 	remediationConfigJsonStr, _ := json.Marshal(remediationConfig)
-	//fmt.Println(res)
-
-	//	remediateJsonStr := []byte(`{
-	//  "CONTAINERS_MISSING_LIVENESSPROBE_KEY": {
-	//    "remediate": {
-	//      "op": "add",
-	//      "path": "{{$INSTANCE_LOCATION}}/livenessProbe",
-	//      "value": {
-	//        "httpGet": {
-	//          "path": "/healthz",
-	//          "port": 8080
-	//        }
-	//      }
-	//    }
-	//  },
-	//  "CONTAINERS_INCORRECT_PERIODSECONDS_VALUE": {
-	//    "remediate": {
-	//      "op": "add",
-	//      "path": "{{$INSTANCE_LOCATION}}/periodSeconds",
-	//      "value": 30
-	//    }
-	//  },
-	//  "CRONJOB_MISSING_CONCURRENCYPOLICY_KEY": {
-	//    "remediate": {
-	//      "op": "add",
-	//      "path": "{{$INSTANCE_LOCATION}}/",
-	//      "value": "Forbid"
-	//    }
-	//  }
-	//}`)
 
 	remediateJson, _ := yaml.JSONToYAML(remediationConfigJsonStr)
 	remediateJson, _ = yaml.YAMLToJSON(remediateJson)
 
+	// todo support same resource name and kind in different namespaces
 	// map[resource_name]map[resource kind]*path_content_to_be_yamled
 	patchMapper := make(map[string]map[string][]string)
 
