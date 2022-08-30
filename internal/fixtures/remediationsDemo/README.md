@@ -45,12 +45,13 @@ $ kubectl patch deployment rss-site --type json --patch-file patches/Deployment-
 
 ## Custom Remediations
 
-notice an example remediations config file is under `./internal/fixtures/remediationsDemo/remediate-example.json`
+check an example for a remediations config file under `./internal/fixtures/remediationsDemo/remediate-example.json`
 it is built as
 
 ```json
 {
   "[rule identifier]": {
+    "run": "{shell script}"
     "remediate": "{JsonPatch}"
   }
 }
@@ -66,7 +67,7 @@ now everytime youll run remediate youll use your published config file, go on ch
 
 ### Variables
 
-INSTANCE_LOCATION = path to the yaml property the rule fell, the value will change that path
+INSTANCE_LOCATION = path to the yaml property the rule failed, the value will change that path
 
 RUN_VALUE = the first echo from the `run` property
 
@@ -101,6 +102,11 @@ example:
 - should we create a fix specifically for helm | kustomize
 - should we create a default remediation config file for all our rules (create a generic fix for each rule)?
 - should we use a yaml file for a custom remediations config
+
+
+## further development
+
+- change the exit code of the `remediate run` command
   MIT
 
 **Free Software, Hell Yeah!**
