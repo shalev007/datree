@@ -2,8 +2,6 @@
 
 ## have a rule you need to fix? no worries just remediate it
 
-[![Build Status](https://travis-ci.org/joemccann/dillinger.svg?branch=master)](https://travis-ci.org/joemccann/dillinger)
-
 ## Usage
 
 in this feature demo we will go through
@@ -65,6 +63,32 @@ $ ./datree remediate publish ./internal/fixtures/remediationsDemo/remediate-exam
 ```
 
 now everytime youll run remediate youll use your published config file, go on change the file give it a try!
+
+### Variables
+
+INSTANCE_LOCATION = path to the yaml property the rule fell, the value will change that path
+
+RUN_VALUE = the first echo from the `run` property
+
+example:
+
+```json
+{
+  "CONTAINERS_MISSING_LIVENESSPROBE_KEY": {
+    "run": "echo shalev222222222222", // shell script to run, the first echo in this script will be stored in $RUN_VALUE
+    "remediate": {
+      "op": "add",
+      "path": "{{$INSTANCE_LOCATION}}/livenessProbe", // will `result to /spec/template/spec/containers/0/livenessProbe`
+      "value": {
+        "httpGet": {
+          "path": "/{{$RUN_VALUE}}", // will result to `shalev222222222222`
+          "port": 8080
+        }
+      }
+    }
+  }
+}
+```
 
 ## Unknowns
 
