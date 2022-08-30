@@ -1,6 +1,7 @@
 package remediate
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -42,7 +43,7 @@ type CliClient interface {
 	//todo add the publish remediate file code
 	RequestEvaluationPrerunData(token string, isCi bool) (*cliClient.EvaluationPrerunDataResponse, error)
 	AddFlags(flags map[string]interface{})
-	GetRemediationConfig(token string) (*cliClient.RemediationConfig, error)
+	GetRemediationConfig(token string, policyName string) (*cliClient.RemediationConfig, error)
 	PublishRemediation(remediationConfig cliClient.PublishFailedRequestBody, token string) (*cliClient.PublishFailedResponse, error)
 }
 
@@ -265,7 +266,7 @@ func New(ctx *RemediateCommandContext) *cobra.Command {
 			cmd.SilenceUsage = true
 			cmd.SilenceErrors = true
 
-			publishFailedResponse, err := publish(ctx, args[0], localConfigContent)
+			publishFailedResponse, err := publish(ctx, args[0], args[1], localConfigContent)
 			if publishFailedResponse != nil {
 				ctx.Printer.PrintMessage("Publish failed:\n", "error")
 				for _, message := range publishFailedResponse.Payload {
@@ -403,7 +404,7 @@ func testAndRemediate(ctx *RemediateCommandContext, paths []string, testCommandD
 	results := evaluationResultData.FormattedResults
 
 	if wereViolationsFound(validationManager, &results) {
-		err = remediate(ctx, testCommandData.Token, results)
+		err = remediate(ctx, testCommandData.Token, testCommandData.Policy.Name, results)
 		// todo handle remediate error
 		return ViolationsFoundError
 	} else {
@@ -431,40 +432,41 @@ func wereViolationsFound(validationManager *ValidationManager, results *evaluati
 	}
 }
 
-func remediate(ctx *RemediateCommandContext, token string, testResults evaluation.FormattedResults) error {
-	//res, _ := ctx.CliClient.GetRemediationConfig(token)
+func remediate(ctx *RemediateCommandContext, token string, policyName string, testResults evaluation.FormattedResults) error {
+	remediationConfig, _ := ctx.CliClient.GetRemediationConfig(token, policyName)
+	remediationConfigJsonStr, _ := json.Marshal(remediationConfig)
 	//fmt.Println(res)
 
-	remediateJsonStr := []byte(`{
-  "CONTAINERS_MISSING_LIVENESSPROBE_KEY": {
-    "remediate": {
-      "op": "add",
-      "path": "{{$INSTANCE_LOCATION}}/livenessProbe",
-      "value": {
-        "httpGet": {
-          "path": "/healthz",
-          "port": 8080
-        }
-      }
-    }
-  },
-  "CONTAINERS_INCORRECT_PERIODSECONDS_VALUE": {
-    "remediate": {
-      "op": "add",
-      "path": "{{$INSTANCE_LOCATION}}/periodSeconds",
-      "value": 30
-    }
-  },
-  "CRONJOB_MISSING_CONCURRENCYPOLICY_KEY": {
-    "remediate": {
-      "op": "add",
-      "path": "{{$INSTANCE_LOCATION}}/",
-      "value": "Forbid"
-    }
-  }
-}`)
+	//	remediateJsonStr := []byte(`{
+	//  "CONTAINERS_MISSING_LIVENESSPROBE_KEY": {
+	//    "remediate": {
+	//      "op": "add",
+	//      "path": "{{$INSTANCE_LOCATION}}/livenessProbe",
+	//      "value": {
+	//        "httpGet": {
+	//          "path": "/healthz",
+	//          "port": 8080
+	//        }
+	//      }
+	//    }
+	//  },
+	//  "CONTAINERS_INCORRECT_PERIODSECONDS_VALUE": {
+	//    "remediate": {
+	//      "op": "add",
+	//      "path": "{{$INSTANCE_LOCATION}}/periodSeconds",
+	//      "value": 30
+	//    }
+	//  },
+	//  "CRONJOB_MISSING_CONCURRENCYPOLICY_KEY": {
+	//    "remediate": {
+	//      "op": "add",
+	//      "path": "{{$INSTANCE_LOCATION}}/",
+	//      "value": "Forbid"
+	//    }
+	//  }
+	//}`)
 
-	remediateJson, _ := yaml.JSONToYAML(remediateJsonStr)
+	remediateJson, _ := yaml.JSONToYAML(remediationConfigJsonStr)
 	remediateJson, _ = yaml.YAMLToJSON(remediateJson)
 
 	// map[resource_name]map[resource kind]*path_content_to_be_yamled
@@ -610,14 +612,15 @@ func evaluate(ctx *RemediateCommandContext, filesPaths []string, testCommandData
 	return evaluationResultData, nil
 }
 
-func publish(ctx *RemediateCommandContext, path string, localConfigContent *localConfig.LocalConfig) (*cliClient.PublishFailedResponse, error) {
+func publish(ctx *RemediateCommandContext, path string, policyName string, localConfigContent *localConfig.LocalConfig) (*cliClient.PublishFailedResponse, error) {
 	remediationConfiguration, err := ctx.FilesExtractor.ExtractYamlFileToUnknownStruct(path)
 	if err != nil {
 		return nil, err
 	}
 
 	requestBody := cliClient.PublishFailedRequestBody{
-		File: remediationConfiguration,
+		File:       remediationConfiguration,
+		PolicyName: policyName,
 	}
 
 	return ctx.CliClient.PublishRemediation(requestBody, localConfigContent.Token)

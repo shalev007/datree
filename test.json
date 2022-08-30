@@ -1,0 +1,28 @@
+{
+  "CONTAINERS_MISSING_LIVENESSPROBE_KEY": {
+    "remediate": {
+      "op": "add",
+      "path": "{{$INSTANCE_LOCATION}}/livenessProbe",
+      "value": {
+        "httpGet": {
+          "path": "/healthz",
+          "port": 8080
+        }
+      }
+    }
+  },
+  "CONTAINERS_INCORRECT_PERIODSECONDS_VALUE": {
+    "remediate": {
+      "op": "add",
+      "path": "{{$INSTANCE_LOCATION}}/periodSeconds",
+      "value": 30
+    }
+  },
+  "CRONJOB_MISSING_CONCURRENCYPOLICY_KEY": {
+    "remediate": {
+      "op": "add",
+      "path": "{{$INSTANCE_LOCATION}}/",
+      "value": "Forbid"
+    }
+  }
+}

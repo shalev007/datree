@@ -8,8 +8,8 @@ import (
 )
 
 type PublishFailedRequestBody struct {
-	File   files.UnknownStruct `json:"file"`
-	Policy string              `json:"policy"`
+	File       files.UnknownStruct `json:"file"`
+	PolicyName string              `json:"policy_name"`
 }
 
 type JsonPatch struct {
@@ -21,7 +21,7 @@ type JsonPatch struct {
 type RemediationConfig map[string]map[string]JsonPatch
 
 func (c *CliClient) PublishRemediation(remediationConfig PublishFailedRequestBody, token string) (*PublishFailedResponse, error) {
-	res, publishErr := c.httpClient.Request(http.MethodPut, "/cli/remedation/tokens/"+token, remediationConfig, map[string]string{})
+	res, publishErr := c.httpClient.Request(http.MethodPut, "/cli/remediation/tokens/"+token, remediationConfig, map[string]string{})
 	if publishErr != nil {
 		if res.StatusCode != 0 {
 			publishFailedResponse := &PublishFailedResponse{}
@@ -36,8 +36,8 @@ func (c *CliClient) PublishRemediation(remediationConfig PublishFailedRequestBod
 	return nil, nil
 }
 
-func (c *CliClient) GetRemediationConfig(token string) (*RemediationConfig, error) {
-	res, requestError := c.httpClient.Request(http.MethodGet, "/cli/remedation/tokens/"+token, interface{}(nil), map[string]string{})
+func (c *CliClient) GetRemediationConfig(token string, policyName string) (*RemediationConfig, error) {
+	res, requestError := c.httpClient.Request(http.MethodGet, "/cli/remedation/tokens/"+token+"?policy_name=", interface{}(nil), map[string]string{})
 	if requestError != nil {
 		return nil, requestError
 	}
