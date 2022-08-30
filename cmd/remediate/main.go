@@ -555,23 +555,14 @@ func evaluate(ctx *RemediateCommandContext, filesPaths []string, testCommandData
 		FormattedResults:  evaluation.FormattedResults{},
 	}
 
+	if policyCheckData.FilesConfigurations == nil {
+		fmt.Println("didn't find valid configurations to remediate")
+		return emptyEvaluationResultData, errors.New("didn't find valid configurations")
+	}
+
 	policyCheckResultData, err := ctx.Evaluator.Evaluate(policyCheckData)
 	if err != nil {
 		return emptyEvaluationResultData, err
-	}
-
-	var failedYamlFiles []string
-	if validationManager.InvalidYamlFilesCount() > 0 {
-		for _, invalidYamlFile := range validationManager.InvalidYamlFiles() {
-			failedYamlFiles = append(failedYamlFiles, invalidYamlFile.Path)
-		}
-	}
-
-	var failedK8sFiles []string
-	if validationManager.InvalidK8sFilesCount() > 0 {
-		for _, invalidK8sFile := range validationManager.InvalidK8sFiles() {
-			failedK8sFiles = append(failedK8sFiles, invalidK8sFile.Path)
-		}
 	}
 
 	evaluationResultData := EvaluationResultData{
