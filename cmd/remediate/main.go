@@ -467,6 +467,7 @@ func remediate(ctx *RemediateCommandContext, token string, policyName string, te
 	remediationConfig, _ := ctx.CliClient.GetRemediationConfig(token, policyName)
 	remediationConfigJsonStr, _ := json.Marshal(remediationConfig)
 
+	// this conversion can be easily refactored to a better one. We just need a json obj and not a []byte
 	remediateJson, _ := yaml.JSONToYAML(remediationConfigJsonStr)
 	remediateJson, _ = yaml.YAMLToJSON(remediateJson)
 
@@ -475,7 +476,6 @@ func remediate(ctx *RemediateCommandContext, token string, policyName string, te
 	patchMapper := make(map[string]map[string][]string)
 
 	// create patches folder
-	// todo maybe rename
 	isDirExists, _ := exists("patches")
 	if !isDirExists {
 		osMkdirErr := os.Mkdir("patches", os.ModePerm)
@@ -484,48 +484,56 @@ func remediate(ctx *RemediateCommandContext, token string, policyName string, te
 		}
 	}
 
-	// todo use filename in the loop
 	for _, rules := range testResults.EvaluationResults.FileNameRuleMapper {
 		for _, rule := range rules {
 			for _, occurrence := range rule.OccurrencesDetails {
-
+				// prepare the first key in the map: config metadataName
 				if _, exists := patchMapper[occurrence.MetadataName]; !exists {
 					patchMapper[occurrence.MetadataName] = make(map[string][]string)
 				}
 
+				// getting the parent object of remediation by rule identifier
 				remediateObj := gjson.Get(string(remediateJson), rule.Identifier)
 				// rule exists in remediate file
 				if remediateObj.Type != gjson.Null {
+					// getting remediate object that contains the patch file structure
 					remediatePatchObj := gjson.Get(remediateObj.Raw, "remediate")
+					// getting the run attribute - run is executable bash script. This property might be not existing
 					runCmd := gjson.Get(remediateObj.Raw, "run")
+					// getting the path attribute - path is the path of the object / attribute that should be remediated
+					// example: /spec/template/spec/containers/0/readinessProbe/periodSeconds
 					path := gjson.Get(remediatePatchObj.Raw, "path")
+					// we get the path from the remediate file with placeholder - replace them with real data
 					replacedPath := strings.ReplaceAll(path.String(), "{{$INSTANCE_LOCATION}}", rule.InstanceLocation)
-
+					// update remediate object to be filled with real data and not placeholders
 					remediatePatchObjUpdated, _ := sjson.Set(remediatePatchObj.Raw, "path", replacedPath)
 
-					// user used run shell command
+					// user used run shell command for injecting the evaluated value to the valued need to be patched
 					if runCmd.Type != gjson.Null && runCmd.String() != "" {
-
-						cmd := exec.Command("/bin/sh", "-c", runCmd.Str)
-						cmd.Env = append(cmd.Env, "CONFIG=Hello asdsaf")
-
-						output, err := cmd.CombinedOutput()
+						outputStr, err := execBashScript(runCmd.Str)
 						if err != nil {
 							return err
 						}
 
+						// get the value from patch object in order to inject the computed value / just the value if run function doesn't exsits
 						preFormattedValue := gjson.Get(remediatePatchObj.Raw, "value")
-						formattedOutput := strings.ReplaceAll(string(output), "\n", "")
+						// the output from exec command is adding "\n" - we don't need it
+						formattedOutput := strings.ReplaceAll(outputStr, "\n", "")
+						// injecting the computed value
 						postFormattedValue := strings.ReplaceAll(preFormattedValue.String(), "{{$RUN_VALUE}}", formattedOutput)
+						// Unmarshal to json if the value is an object
 						var jsonMap map[string]interface{}
 						unmarshalError := json.Unmarshal([]byte(postFormattedValue), &jsonMap)
 						if unmarshalError != nil {
+							// put the value if not json
 							remediatePatchObjUpdated, _ = sjson.Set(remediatePatchObjUpdated, "value", postFormattedValue)
 						} else {
+							// put the json if json
 							remediatePatchObjUpdated, _ = sjson.Set(remediatePatchObjUpdated, "value", jsonMap)
 						}
 
 					}
+					// save the json that contains the data for the future patch file in the mapper
 					remediateJson, _ := yaml.YAMLToJSON([]byte(remediatePatchObjUpdated))
 					// resource name and kind not already exists in mapper
 					if _, exists := patchMapper[occurrence.MetadataName][occurrence.Kind]; !exists {
@@ -538,8 +546,10 @@ func remediate(ctx *RemediateCommandContext, token string, policyName string, te
 		}
 	}
 
+	// prepare the path file for each resource and kind. Each patch file contains all the changes that should be made
 	for resourceName, metadataNamePatcher := range patchMapper {
 		res := "["
+		// take the stringified json array and build a strinfigied json array to be yamelized later on
 		for kind, kindPatcher := range metadataNamePatcher {
 			for _, remediateObj := range kindPatcher {
 				res += remediateObj
@@ -547,6 +557,7 @@ func remediate(ctx *RemediateCommandContext, token string, policyName string, te
 			}
 			res += "]"
 			resYml, _ := yaml.JSONToYAML([]byte(res))
+			// write the content into a new file under patched folder
 			err := os.WriteFile(fmt.Sprintf("patches/%s-%s-fixed.yml", kind, resourceName), resYml, 0644)
 			fmt.Println(err)
 		}
@@ -643,4 +654,17 @@ func publish(ctx *RemediateCommandContext, path string, policyName string, local
 	}
 
 	return ctx.CliClient.PublishRemediation(requestBody, localConfigContent.Token)
+}
+
+func execBashScript(runCmd string) (string, error) {
+	//runCmd.Str
+	cmd := exec.Command("/bin/sh", "-c", runCmd)
+	// CONFIG=Hello...is a poc for bubble the configuration structure into the bash script to be able to do more sophisticated logic
+	cmd.Env = append(cmd.Env, "CONFIG=Hello asdsaf")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
 }
